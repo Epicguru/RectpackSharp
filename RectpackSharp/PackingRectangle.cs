@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Drawing;
+using JetBrains.Annotations;
 
 namespace RectpackSharp
 {
     /// <summary>
     /// A rectangle that can be used for a rectangle packing operation.
     /// </summary>
+    [PublicAPI]
     public struct PackingRectangle : IEquatable<PackingRectangle>, IComparable<PackingRectangle>
     {
         /// <summary>
@@ -35,7 +37,7 @@ namespace RectpackSharp
         /// <remarks>Setting this will only modify the <see cref="Width"/>.</remarks>
         public uint Right
         {
-            get => X + Width;
+            readonly get => X + Width;
             set => Width = value - X;
         }
 
@@ -45,22 +47,22 @@ namespace RectpackSharp
         /// <remarks>Setting this will only modify the <see cref="Height"/>.</remarks>
         public uint Bottom
         {
-            get => Y + Height;
+            readonly get => Y + Height;
             set => Height = value - Y;
         }
 
         /// <summary>Calculates this <see cref="PackingRectangle"/>'s area.</summary>
-        public uint Area => Width * Height;
+        public readonly uint Area => Width * Height;
 
         /// <summary>Calculates this <see cref="PackingRectangle"/>'s perimeter.</summary>
-        public uint Perimeter => Width + Width + Height + Height;
+        public readonly uint Perimeter => Width + Width + Height + Height;
 
         /// <summary>Gets this <see cref="PackingRectangle"/>'s bigger side.</summary>
-        public uint BiggerSide => Math.Max(Width, Height);
+        public readonly uint BiggerSide => Math.Max(Width, Height);
 
         /// <summary>Calculates this <see cref="PackingRectangle"/>'s pathological multiplier.</summary>
         /// <remarks>This is calculated as: <code>max(width, height) / min(width, height) * width * height</code></remarks>
-        public uint PathologicalMultiplier => (Width > Height ? (Width / Height) : (Height / Width)) * Width * Height;
+        public readonly uint PathologicalMultiplier => (Width > Height ? (Width / Height) : (Height / Width)) * Width * Height;
 
         /// <summary>
         /// Creates a <see cref="PackingRectangle"/> with the specified values.
@@ -97,7 +99,7 @@ namespace RectpackSharp
         /// Returns whether the given <see cref="PackingRectangle"/> is contained
         /// entirely within this <see cref="PackingRectangle"/>.
         /// </summary>
-        public bool Contains(in PackingRectangle other)
+        public readonly bool Contains(in PackingRectangle other)
         {
             return X <= other.X && Y <= other.Y && Right >= other.Right && Bottom >= other.Bottom;
         }
@@ -106,7 +108,7 @@ namespace RectpackSharp
         /// Returns whether the given <see cref="PackingRectangle"/> intersects with
         /// this <see cref="PackingRectangle"/>.
         /// </summary>
-        public bool Intersects(in PackingRectangle other)
+        public readonly bool Intersects(in PackingRectangle other)
         {
             return other.X < X + Width && X < (other.X + other.Width)
                 && other.Y < Y + Height && Y < other.Y + other.Height;
@@ -115,7 +117,7 @@ namespace RectpackSharp
         /// <summary>
         /// Calculates the intersection of this <see cref="PackingRectangle"/> with another.
         /// </summary>
-        public PackingRectangle Intersection(in PackingRectangle other)
+        public readonly PackingRectangle Intersection(in PackingRectangle other)
         {
             uint x1 = Math.Max(X, other.X);
             uint x2 = Math.Min(Right, other.Right);
@@ -127,23 +129,23 @@ namespace RectpackSharp
             return default;
         }
 
-        public override string ToString()
+        public readonly override string ToString()
         {
             return string.Concat("{ X=", X.ToString(), ", Y=", Y.ToString(), ", Width=", Width.ToString() + ", Height=", Height.ToString(), ", Id=", Id.ToString(), " }");
         }
 
-        public override int GetHashCode()
+        public readonly override int GetHashCode()
         {
             return HashCode.Combine(X, Y, Width, Height, Id);
         }
 
-        public bool Equals(PackingRectangle other)
+        public readonly bool Equals(PackingRectangle other)
         {
             return X == other.X && Y == other.Y && Width == other.Width
                 && Height == other.Height && Id == other.Id;
         }
 
-        public override bool Equals(object obj)
+        public readonly override bool Equals(object obj)
         {
             if (obj is PackingRectangle viewport)
                 return Equals(viewport);
@@ -153,7 +155,7 @@ namespace RectpackSharp
         /// <summary>
         /// Compares this <see cref="SortKey"/> with another <see cref="PackingRectangle"/>'s.
         /// </summary>
-        public int CompareTo(PackingRectangle other)
+        public readonly int CompareTo(PackingRectangle other)
         {
             return -SortKey.CompareTo(other.SortKey);
         }

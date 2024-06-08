@@ -1,4 +1,5 @@
 ﻿using System;
+using JetBrains.Annotations;
 
 namespace RectpackSharp
 {
@@ -6,6 +7,7 @@ namespace RectpackSharp
     /// Specifies hints that help optimize the rectangle packing algorithm. 
     /// </summary>
     [Flags]
+    [PublicAPI]
     public enum PackingHints
     {
         /// <summary>Tells the rectangle packer to try inserting the rectangles ordered by area.</summary>
@@ -48,21 +50,21 @@ namespace RectpackSharp
         /// <returns>The value that should be assigned to <see cref="PackingRectangle.SortKey"/>.</returns>
         private delegate uint GetSortKeyDelegate(in PackingRectangle rectangle);
 
-        /// <summary>The maximum amount of hints that can be specified by a <see cref="PackingHint"/>.</summary>
+        /// <summary>The maximum amount of hints that can be specified by a <see cref="PackingHints"/>.</summary>
         internal const int MaxHintCount = 6;
 
-        public static uint GetArea(in PackingRectangle rectangle) => rectangle.Area;
-        public static uint GetPerimeter(in PackingRectangle rectangle) => rectangle.Perimeter;
-        public static uint GetBiggerSide(in PackingRectangle rectangle) => rectangle.BiggerSide;
-        public static uint GetWidth(in PackingRectangle rectangle) => rectangle.Width;
-        public static uint GetHeight(in PackingRectangle rectangle) => rectangle.Height;
-        public static uint GetPathologicalMultiplier(in PackingRectangle rectangle) => rectangle.PathologicalMultiplier;
+        private static uint GetArea(in PackingRectangle rectangle) => rectangle.Area;
+        private static uint GetPerimeter(in PackingRectangle rectangle) => rectangle.Perimeter;
+        private static uint GetBiggerSide(in PackingRectangle rectangle) => rectangle.BiggerSide;
+        private static uint GetWidth(in PackingRectangle rectangle) => rectangle.Width;
+        private static uint GetHeight(in PackingRectangle rectangle) => rectangle.Height;
+        private static uint GetPathologicalMultiplier(in PackingRectangle rectangle) => rectangle.PathologicalMultiplier;
 
         /// <summary>
-        /// Separates a <see cref="PackingHint"/> into the multiple options it contains,
+        /// Separates a <see cref="PackingHints"/> into the multiple options it contains,
         /// saving each of those separately onto a <see cref="Span{T}"/>.
         /// </summary>
-        /// <param name="packingHint">The <see cref="PackingHint"/> to separate.</param>
+        /// <param name="packingHint">The <see cref="PackingHints"/> to separate.</param>
         /// <param name="span">The span in which to write the resulting hints. This span's excess will be sliced.</param>
         public static void GetFlagsFrom(PackingHints packingHint, ref Span<PackingHints> span)
         {
@@ -83,43 +85,25 @@ namespace RectpackSharp
         }
 
         /// <summary>
-        /// Sorts the given <see cref="PackingRectangle"/> array using the specified <see cref="PackingHint"/>.
+        /// Sorts the given <see cref="PackingRectangle"/> array using the specified <see cref="PackingHints"/>.
         /// </summary>
         /// <param name="rectangles">The rectangles to sort.</param>
         /// <param name="packingHint">The hint to sort by. Must be a single bit value.</param>
         /// <remarks>
         /// The <see cref="PackingRectangle.SortKey"/> values will be modified.
         /// </remarks>
-#if NET5_0_OR_GREATER
         public static void SortByPackingHint(Span<PackingRectangle> rectangles, PackingHints packingHint)
-#elif NETSTANDARD2_0
-        public static void SortByPackingHint(PackingRectangle[] rectangles, PackingHints packingHint)
-#endif
         {
             // We first get the appropiate delegate for getting a rectangle's sort key.
-            GetSortKeyDelegate getKeyDelegate;
-            switch (packingHint)
+            GetSortKeyDelegate getKeyDelegate = packingHint switch
             {
-                case PackingHints.TryByArea:
-                    getKeyDelegate = GetArea;
-                    break;
-                case PackingHints.TryByPerimeter:
-                    getKeyDelegate = GetPerimeter;
-                    break;
-                case PackingHints.TryByBiggerSide:
-                    getKeyDelegate = GetBiggerSide;
-                    break;
-                case PackingHints.TryByWidth:
-                    getKeyDelegate = GetWidth;
-                    break;
-                case PackingHints.TryByHeight:
-                    getKeyDelegate = GetHeight;
-                    break;
-                case PackingHints.TryByPathologicalMultiplier:
-                    getKeyDelegate = GetPathologicalMultiplier;
-                    break;
-                default:
-                    throw new ArgumentException(nameof(packingHint));
+                PackingHints.TryByArea => GetArea,
+                PackingHints.TryByPerimeter => GetPerimeter,
+                PackingHints.TryByBiggerSide => GetBiggerSide,
+                PackingHints.TryByWidth => GetWidth,
+                PackingHints.TryByHeight => GetHeight,
+                PackingHints.TryByPathologicalMultiplier => GetPathologicalMultiplier,
+                _ => throw new ArgumentException(nameof(packingHint))
             };
 
             // We use the getKeyDelegate to set the sort keys for all the rectangles.
@@ -127,11 +111,7 @@ namespace RectpackSharp
                 rectangles[i].SortKey = getKeyDelegate(rectangles[i]);
 
             // We sort the array, using the default rectangle comparison (which compares sort keys).
-#if NET5_0_OR_GREATER
             rectangles.Sort();
-#elif NETSTANDARD2_0
-            Array.Sort(rectangles);
-#endif
         }
     }
 }
