@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using JetBrains.Annotations;
 
 namespace RectpackSharp
@@ -11,8 +12,8 @@ namespace RectpackSharp
     public static class RectanglePacker
     {
         /// <summary>A weak reference to the last list used, so it can be reused in subsequent packs.</summary>
-        private static WeakReference<List<PackingRectangle>> oldListReference;
-        private static readonly object oldListReferenceLock = new object();
+        private static readonly Queue<List<PackingRectangle>> listPool = new Queue<List<PackingRectangle>>();
+        private static readonly Lock listPoolLock = new Lock();
 
         /// <summary>
         /// Finds a way to pack all the given rectangles into a single bin. Performance can be traded for
@@ -28,7 +29,7 @@ namespace RectpackSharp
         /// <remarks>
         /// The <see cref="PackingRectangle.Id"/> values are never touched. Use this to identify your rectangles.
         /// </remarks>
-        public static void Pack(Span<PackingRectangle> rectangles, out PackingRectangle bounds,
+        public static bool TryPack(Span<PackingRectangle> rectangles, out PackingRectangle bounds,
             PackingHints packingHint = PackingHints.FindBest, double acceptableDensity = 1, uint stepSize = 1,
             uint? maxBoundsWidth = null, uint? maxBoundsHeight = null)
         {
@@ -38,15 +39,15 @@ namespace RectpackSharp
             if (double.IsNaN(acceptableDensity) || double.IsInfinity(acceptableDensity))
                 throw new ArgumentException("Must be a real number", nameof(acceptableDensity));
 
-            if (maxBoundsWidth is 0)
+            if (maxBoundsWidth <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxBoundsWidth), maxBoundsWidth, nameof(maxBoundsWidth) + " must be greater than 0.");
 
-            if (maxBoundsHeight is 0)
+            if (maxBoundsHeight <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxBoundsHeight), maxBoundsHeight, nameof(maxBoundsHeight) + " must be greater than 0.");
 
             bounds = default;
             if (rectangles.Length == 0)
-                return;
+                return true;
 
             // We separate the value in packingHint into the different options it specifies.
             Span<PackingHints> hints = stackalloc PackingHints[PackingHintExtensions.MaxHintCount];
@@ -77,27 +78,16 @@ namespace RectpackSharp
             bool hasSolution = false;
 
             // In one array we'll store the current best solution, and we'll also need two temporary arrays.
-#if NET5_0_OR_GREATER
             Span<PackingRectangle> currentBest = rectangles;
             Span<PackingRectangle> tmpBest = new PackingRectangle[rectangles.Length];
             Span<PackingRectangle> tmpArray = new PackingRectangle[rectangles.Length];
-#elif NETSTANDARD2_0
-            PackingRectangle[] currentBest = rectangles;
-            PackingRectangle[] tmpBest = new PackingRectangle[rectangles.Length];
-            PackingRectangle[] tmpArray = new PackingRectangle[rectangles.Length];
-#endif
-       
 
             // For each of the specified hints, we try to pack and see if we can find a better solution.
             for (int i = 0; i < hints.Length && (!hasSolution || currentBestArea > acceptableBoundsArea); i++)
             {
                 // We copy the rectangles onto the tmpBest array, then sort them by what the packing hint says.
-#if NET5_0_OR_GREATER
                 currentBest.CopyTo(tmpBest);
-#elif NETSTANDARD2_0
-                currentBest.CopyTo(tmpBest, 0);
-#endif
-                PackingHintExtensions.SortByPackingHint(tmpBest, hints[i]);
+                tmpBest.SortByPackingHint(hints[i]);
 
                 // We try to find the best bin for the rectangles in tmpBest. We give the function as
                 // initial bin size the size of the best bin we got so far. The function never tries
@@ -114,11 +104,7 @@ namespace RectpackSharp
                     binHeight = bounds.Height;
 
                     // We swap tmpBest and currentBest
-#if NET5_0_OR_GREATER
                     Span<PackingRectangle> swapTmp = tmpBest;
-#elif NETSTANDARD2_0
-                    PackingRectangle[] swaptmp = tmpBest;
-#endif
                     tmpBest = currentBest;
                     currentBest = swapTmp;
                     hasSolution = true;
@@ -126,18 +112,20 @@ namespace RectpackSharp
             }
 
             if (!hasSolution)
-                throw new Exception("Failed to find a solution. (Do your rectangles have a size close to uint.MaxValue or is your stepSize too high?)");
+            {
+                // No space, failed to pack.
+                return false;
+            }
 
             // The solution should be in the "rectangles" array passed as parameter.
             if (currentBest != rectangles)
-#if NET5_0_OR_GREATER
+            {
                 currentBest.CopyTo(rectangles);
-#elif NETSTANDARD2_0
-                currentBest.CopyTo(rectangles, 0);
-#endif
+            }
 
             // We return the list so that it can be used in subsequent pack operations.
             ReturnList(emptySpaces);
+            return true;
         }
 
         /// <summary>
@@ -153,13 +141,8 @@ namespace RectpackSharp
         /// <param name="acceptableArea">Stops searching once a bin with this area or less is found.</param>
         /// <param name="bounds">The bounds of the resulting bin (0, 0, width, height).</param>
         /// <returns>Whether a solution was found.</returns>
-#if NET5_0_OR_GREATER
         private static bool TryFindBestBin(List<PackingRectangle> emptySpaces, ref Span<PackingRectangle> rectangles,
             ref Span<PackingRectangle> tmpArray, uint binWidth, uint binHeight, uint stepSize, uint acceptableArea, out PackingRectangle bounds)
-#elif NETSTANDARD2_0
-        private static bool TryFindBestBin(List<PackingRectangle> emptySpaces, ref PackingRectangle[] rectangles,
-            ref PackingRectangle[] tmpArray, uint binWidth, uint binHeight, uint stepSize, uint acceptableArea, out PackingRectangle bounds)
-#endif
         {
             // We set boundsWidth and boundsHeight to these initial
             // values to ensure that they're not good enough for acceptableArea.
@@ -300,19 +283,16 @@ namespace RectpackSharp
         /// <param name="preferredCapacity">If a list has to be created, this is used as initial capacity.</param>
         private static List<PackingRectangle> GetList(int preferredCapacity)
         {
-            if (oldListReference == null)
-                return new List<PackingRectangle>(preferredCapacity);
-
-            lock (oldListReferenceLock)
+            using (listPoolLock.EnterScope())
             {
-                if (oldListReference.TryGetTarget(out List<PackingRectangle> list))
+                if (listPool.TryDequeue(out var found))
                 {
-                    oldListReference.SetTarget(null);
-                    return list;
+                    found.EnsureCapacity(preferredCapacity);
+                    return found;
                 }
-                else
-                    return new List<PackingRectangle>(preferredCapacity);
             }
+
+            return new List<PackingRectangle>(preferredCapacity);
         }
 
         /// <summary>
@@ -321,17 +301,10 @@ namespace RectpackSharp
         /// </summary>
         private static void ReturnList(List<PackingRectangle> list)
         {
-            lock (oldListReferenceLock)
+            list.Clear();
+            using (listPoolLock.EnterScope())
             {
-                if (oldListReference == null)
-                {
-                    oldListReference = new WeakReference<List<PackingRectangle>>(list);
-                }
-                else
-                {
-                    if (!oldListReference.TryGetTarget(out List<PackingRectangle> oldList) || oldList.Capacity < list.Capacity)
-                        oldListReference.SetTarget(list);
-                }
+                listPool.Enqueue(list);
             }
         }
 

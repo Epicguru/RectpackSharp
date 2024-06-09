@@ -20,6 +20,7 @@
     <RepositoryType>git</RepositoryType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <EnablePreviewFeatures>true</EnablePreviewFeatures>
   </PropertyGroup>
 
   <ItemGroup>

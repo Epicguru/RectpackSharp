@@ -80,20 +80,20 @@ namespace RectpackSharp
         /// <summary>
         /// Creates a <see cref="PackingRectangle"/> from a <see cref="Rectangle"/>.
         /// </summary>
-        public PackingRectangle(Rectangle rectangle, int id = 0)
+        public PackingRectangle(in Rectangle rectangle, int id = 0)
             : this((uint)rectangle.X, (uint)rectangle.Y, (uint)rectangle.Width, (uint)rectangle.Height, id)
         {
 
         }
 
-        public static implicit operator Rectangle(PackingRectangle rectangle)
+        public static implicit operator Rectangle(in PackingRectangle rectangle)
             => new Rectangle((int)rectangle.X, (int)rectangle.Y, (int)rectangle.Width, (int)rectangle.Height);
 
-        public static implicit operator PackingRectangle(Rectangle rectangle)
+        public static implicit operator PackingRectangle(in Rectangle rectangle)
             => new PackingRectangle((uint)rectangle.X, (uint)rectangle.Y, (uint)rectangle.Width, (uint)rectangle.Height);
 
-        public static bool operator ==(PackingRectangle left, PackingRectangle right) => left.Equals(right);
-        public static bool operator !=(PackingRectangle left, PackingRectangle right) => !left.Equals(right);
+        public static bool operator ==(in PackingRectangle left, in PackingRectangle right) => left.Equals(right);
+        public static bool operator !=(in PackingRectangle left, in PackingRectangle right) => !left.Equals(right);
 
         /// <summary>
         /// Returns whether the given <see cref="PackingRectangle"/> is contained

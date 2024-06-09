@@ -41,7 +41,7 @@ namespace RectpackSharp
     /// <summary>
     /// Provides internal values and functions used by the rectangle packing algorithm.
     /// </summary>
-    internal static class PackingHintExtensions
+    public static class PackingHintExtensions
     {
         /// <summary>
         /// Represents a method for calculating a sort key from a <see cref="PackingRectangle"/>.
@@ -81,7 +81,8 @@ namespace RectpackSharp
                 span[index++] = PackingHints.TryByHeight;
             if (packingHint.HasFlag(PackingHints.TryByPathologicalMultiplier))
                 span[index++] = PackingHints.TryByPathologicalMultiplier;
-            span = span.Slice(0, index);
+            
+            span = span[..index];
         }
 
         /// <summary>
@@ -92,7 +93,7 @@ namespace RectpackSharp
         /// <remarks>
         /// The <see cref="PackingRectangle.SortKey"/> values will be modified.
         /// </remarks>
-        public static void SortByPackingHint(Span<PackingRectangle> rectangles, PackingHints packingHint)
+        public static Span<PackingRectangle> SortByPackingHint(this Span<PackingRectangle> rectangles, PackingHints packingHint)
         {
             // We first get the appropiate delegate for getting a rectangle's sort key.
             GetSortKeyDelegate getKeyDelegate = packingHint switch
@@ -112,6 +113,7 @@ namespace RectpackSharp
 
             // We sort the array, using the default rectangle comparison (which compares sort keys).
             rectangles.Sort();
+            return rectangles;
         }
     }
 }
